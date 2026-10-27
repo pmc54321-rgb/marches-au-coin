@@ -204,7 +204,32 @@ app.post('/api/markets', async (req, res) => {
         });
       }
     }
+// Add established weekly markets from our database
+for (const market of marketDatabase.markets) {
+  const matchingDays = days.filter(date =>
+    market.days.includes(weekdays[date.getUTCDay()])
+  );
 
+  if (!matchingDays.length) continue;
+
+  const place = await geocode(market.town + ', France');
+  if (!place) continue;
+
+  const distance = distanceKm(origin, place);
+  if (distance > radius) continue;
+
+  results.push({
+    name: market.name,
+    town: market.town,
+    location: place.address,
+    address: place.address,
+    hours: market.hours,
+    type: 'Marché hebdomadaire',
+    distance_km: Math.round(distance * 10) / 10,
+    source_url: '',
+    weekdays: matchingDays.map(date => date.getUTCDay())
+  });
+}
     const output = days.map(date => ({
       label: new Intl.DateTimeFormat('fr-FR', {
         weekday: 'long',
