@@ -1,6 +1,240 @@
-const express=require("express"),path=require("path");const app=express();app.use(express.json());app.use(express.static(path.join(__dirname,"public")));const PORT=process.env.PORT||3000,KEY=process.env.SEARCH_API_KEY,MAPKEY=process.env.GOOGLE_MAPS_API_KEY;
-const hav=(a,b,c,d)=>{const R=6371,x=(b-a)*Math.PI/180,y=(d-c)*Math.PI/180,q=Math.sin(x/2)**2+Math.cos(a*Math.PI/180)*Math.cos(b*Math.PI/180)*Math.sin(y/2)**2;return 2*R*Math.asin(Math.sqrt(q))};
-async function geo(q){if(!MAPKEY)return null;const r=await fetch("https://maps.googleapis.com/maps/api/geocode/json?address="+encodeURIComponent(q)+"&key="+MAPKEY),j=await r.json(),p=j.results?.[0]?.geometry?.location;return p?{lat:p.lat,lng:p.lng,formatted:j.results[0].formatted_address}:null}
-async function web(q){if(!KEY)throw Error("SEARCH_API_KEY manquante");const r=await fetch("https://google.serper.dev/search",{method:"POST",headers:{"X-API-KEY":KEY,"Content-Type":"application/json"},body:JSON.stringify({q,gl:"fr",hl:"fr",num:10})});if(!r.ok)throw Error("Service de recherche indisponible");return r.json()}
-function days(){const a=[];for(let i=0;i<3;i++){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+i);a.push(d)}return a}
-app.post("/api/markets",async(req,res)=>{try{const radius=Math.max(1,Math.min(100,Number(req.body.radius_km)||20));let ref=req.body.location,origin=req.body.coords;if(!origin&&ref){const g=await geo(ref);if(g){origin={lat:g.lat,lng:g.lng};ref=g.formatted}}if(!origin&&!ref)return res.status(400).json({error:"Indiquez une ville, un code postal ou autorisez la position."});if(!ref)ref=origin.lat+","+origin.lng;const out=[];for(const d of days()){const label=new Intl.DateTimeFormat("fr-FR",{weekday:"long",day:"numeric",month:"long"}).format(d),data=await web("marché France "+label+" "+ref+" marché producteurs marché hebdomadaire brocante"),items=[];for(const x of data.organic||[]){if(!/march|brocant|vide[- ]grenier|producteur/i.test((x.title||"")+" "+(x.snippet||"")))continue;let distance=null;const dm=(x.snippet||"").match(/(\d+(?:[.,]\d+)?)\s*km/i);if(dm)distance=parseFloat(dm[1].replace(",","."));if(distance!==null&&distance>radius)continue;items.push({name:x.title||"Marché",town:"",hours:"Voir la source",type:"Marché / événement",distance_km:distance===null?"—":Math.round(distance*10)/10,source_url:x.link,address:x.title})}out.push({label,markets:items.slice(0,8)})}res.json({reference:ref,days:out})}catch(e){res.status(500).json({error:e.message})}});app.get("/health",(q,r)=>r.json({ok:true}));app.listen(PORT,()=>console.log("Marchés Au Coin on "+PORT));
+
+// Marchés Au Coin — improved market search
+const express = require('express');
+const path = require('path');
+const app = express();
+
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+const PORT = process.env.PORT || 3000;
+const SEARCH_KEY = process.env.SEARCH_API_KEY;
+const MAP_KEY = process.env.GOOGLE_MAPS_API_KEY;
+
+const weekdays = [
+  'dimanche', 'lundi', 'mardi', 'mercredi',
+  'jeudi', 'vendredi', 'samedi'
+];
+
+function distanceKm(a, b) {
+  const rad = x => x * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) *
+    Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.sqrt(h));
+}
+
+async function geocode(address) {
+  const url = new URL(
+    'https://maps.googleapis.com/maps/api/geocode/json'
+  );
+  url.searchParams.set('address', address);
+  url.searchParams.set('components', 'country:FR');
+  url.searchParams.set('key', MAP_KEY);
+
+  const response = await fetch(url);
+  const data = await response.json();
+  if (data.status !== 'OK' || !data.results?.length) {
+    return null;
+  }
+  const result = data.results[0];
+  return {
+    lat: result.geometry.location.lat,
+    lng: result.geometry.location.lng,
+    address: result.formatted_address
+  };
+}
+
+async function webSearch(query) {
+  const response = await fetch(
+    'https://google.serper.dev/search',
+    {
+      method: 'POST',
+      headers: {
+        'X-API-KEY': SEARCH_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        q: query,
+        gl: 'fr',
+        hl: 'fr',
+        num: 10
+      })
+    }
+  );
+  if (!response.ok) throw Error('Recherche indisponible');
+  const data = await response.json();
+  return data.organic || [];
+}
+
+function nextThreeDays() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
+
+  const part = name =>
+    Number(parts.find(x => x.type === name).value);
+
+  const start = Date.UTC(
+    part('year'), part('month') - 1, part('day'), 12
+  );
+
+  return [0, 1, 2].map(
+    i => new Date(start + i * 86400000)
+  );
+}
+
+function extractTown(title) {
+  const match = title.match(
+    /marché (?:hebdomadaire |alimentaire |de producteurs )?(?:de |d'|à )([\p{L}' -]{3,45})/iu
+  );
+  if (!match) return null;
+  return match[1]
+    .split(/\s+[|–—-]\s+/)[0]
+    .trim();
+}
+
+function matchesDay(text, day) {
+  const expression = new RegExp(
+    '(?:chaque|tous les|le|les|marché du)\\s+' +
+    day + 's?\\b',
+    'i'
+  );
+  return expression.test(text);
+}
+
+app.post('/api/markets', async (req, res) => {
+  try {
+    const radius = Math.min(
+      100, Math.max(1, Number(req.body.radius_km) || 20)
+    );
+
+    let origin;
+    let reference;
+
+    if (req.body.coords &&
+        Number.isFinite(Number(req.body.coords.lat)) &&
+        Number.isFinite(Number(req.body.coords.lng))) {
+      origin = {
+        lat: Number(req.body.coords.lat),
+        lng: Number(req.body.coords.lng)
+      };
+      reference = 'Position actuelle';
+    } else {
+      const input = String(req.body.location || '').trim();
+      if (!input) {
+        return res.status(400).json({
+          error: 'Veuillez indiquer une commune ou un code postal.'
+        });
+      }
+      const address = /france/i.test(input)
+        ? input : input + ', France';
+      const found = await geocode(address);
+      if (!found) {
+        return res.status(400).json({
+          error: 'Localité introuvable en France.'
+        });
+      }
+      origin = found;
+      reference = found.address;
+    }
+
+    const days = nextThreeDays();
+    const results = [];
+    const seen = new Set();
+
+    const queries = [
+      `marché hebdomadaire jours horaires ${reference} France`,
+      `marchés alimentaires communes proches ${reference} France`
+    ];
+
+    for (const query of queries) {
+      const pages = await webSearch(query);
+
+      for (const page of pages) {
+        const title = String(page.title || '');
+        const snippet = String(page.snippet || '');
+        const evidence = title + ' ' + snippet;
+        const link = String(page.link || '');
+
+        if (!/marché/i.test(evidence)) continue;
+        if (/vide.grenier|brocante|marché de noël|immobilier/i
+            .test(evidence)) continue;
+        if (!/^https:\/\//.test(link)) continue;
+
+        const town = extractTown(title);
+        if (!town) continue;
+
+        const key = town.toLowerCase() + '|' + link;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        let place;
+        try {
+          place = await geocode(town + ', France');
+        } catch {
+          continue;
+        }
+        if (!place) continue;
+
+        const distance = distanceKm(origin, place);
+        if (distance > radius) continue;
+
+        const matchingDays = days.filter(date =>
+          matchesDay(evidence, weekdays[date.getUTCDay()])
+        );
+        if (!matchingDays.length) continue;
+
+        results.push({
+          name: title,
+          town,
+          location: place.address,
+          address: place.address,
+          hours: 'Horaires à vérifier auprès de la source',
+          type: 'Marché hebdomadaire (source web)',
+          distance_km: Math.round(distance * 10) / 10,
+          source_url: link,
+          weekdays: matchingDays.map(d => d.getUTCDay())
+        });
+      }
+    }
+
+    const output = days.map(date => ({
+      label: new Intl.DateTimeFormat('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        timeZone: 'UTC'
+      }).format(date),
+      markets: results
+        .filter(m => m.weekdays.includes(date.getUTCDay()))
+        .map(({ weekdays, ...market }) => market)
+        .sort((a, b) => a.distance_km - b.distance_km)
+        .slice(0, 12)
+    }));
+
+    res.json({
+      reference,
+      days: output,
+      note: 'Jours indicatifs : vérifiez les horaires auprès de la source.'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: error.message || 'Erreur de recherche'
+    });
+  }
+});
+
+app.get('/health', (req, res) => {
+  res.json({ ok: true });
+});
+
+app.listen(PORT, () => {
+  console.log('Marchés Au Coin running on port ' + PORT);
+});
