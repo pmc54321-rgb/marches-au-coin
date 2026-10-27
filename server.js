@@ -2,6 +2,7 @@
 // Marchés Au Coin — improved market search
 const express = require('express');
 const path = require('path');
+const marketDatabase = require('./markets.json');
 const app = express();
 
 app.use(express.json());
