@@ -1,0 +1,54 @@
+
+{
+  "markets": [
+    {
+      "town": "Combourg",
+      "name": "Marché de Combourg",
+      "days": ["lundi"],
+      "hours": "Matin",
+      "verified": false
+    },
+    {
+      "town": "Tinténiac",
+      "name": "Marché de Tinténiac",
+      "days": ["mercredi"],
+      "hours": "Matin",
+      "verified": false
+    },
+    {
+      "town": "Dinan",
+      "name": "Grand marché de Dinan",
+      "days": ["jeudi"],
+      "hours": "Matin",
+      "verified": false
+    },
+    {
+      "town": "Lanvallay",
+      "name": "Marché de Lanvallay",
+      "days": ["mardi", "vendredi"],
+      "hours": "À confirmer",
+      "verified": false
+    },
+    {
+      "town": "Évran",
+      "name": "Marché d'Évran",
+      "days": ["samedi"],
+      "hours": "08:00–13:00",
+      "verified": false
+    },
+    {
+      "town": "Léhon",
+      "name": "Marché de Léhon",
+      "days": ["samedi"],
+      "hours": "09:00–12:00",
+      "verified": false
+    },
+    {
+      "town": "Pleugueneuc",
+      "name": "Marché de Pleugueneuc",
+      "days": ["dimanche"],
+      "hours": "08:00–12:00",
+      "verified": false
+    }
+  ]
+}
