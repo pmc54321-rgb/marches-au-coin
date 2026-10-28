@@ -71,13 +71,15 @@ async function webSearch(query) {
   return data.organic || [];
 }
 
-async function fetchNationalMarkets(commune) {
+async function fetchNationalMarkets(commune, radius, origin) {
   const markets = [];
   const seen = new Set();
 
   for (let page = 1; page <= 5; page++) {
     const url = new URL(NATIONAL_MARKETS_URL);
-    url.searchParams.set('commune', commune);
+   url.searchParams.set('lat', String(origin.lat));
+url.searchParams.set('lng', String(origin.lng));
+url.searchParams.set('radius', String(radius)); 
     url.searchParams.set('page', String(page));
 
     const response = await fetch(url, {
