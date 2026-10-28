@@ -71,6 +71,38 @@ async function webSearch(query) {
   return data.organic || [];
 }
 
+async function fetchNationalMarkets(commune) {
+  const markets = [];
+  const seen = new Set();
+
+  for (let page = 1; page <= 5; page++) {
+    const url = new URL(NATIONAL_MARKETS_URL);
+    url.searchParams.set('commune', commune);
+    url.searchParams.set('page', String(page));
+
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(10000)
+    });
+
+    if (!response.ok) {
+      throw new Error('Base nationale indisponible');
+    }
+
+    const data = await response.json();
+
+    for (const market of data.marches || []) {
+      if (!seen.has(market.id)) {
+        seen.add(market.id);
+        markets.push(market);
+      }
+    }
+
+    if (page >= (data.pages || 1)) break;
+  }
+
+  return markets;
+}
+
 function nextThreeDays() {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Paris',
