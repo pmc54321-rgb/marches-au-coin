@@ -186,9 +186,11 @@ app.post('/api/markets', async (req, res) => {
 
     // Retrieve established markets from the national database
     try {
-      const nationalMarkets = await fetchNationalMarkets(
-        reference.split(',')[0].replace(/^\d{5}\s*/, '').trim()
-      );
+    const nationalMarkets = await fetchNationalMarkets(
+  reference.split(',')[0].replace(/^\d{5}\s*/, '').trim(),
+  radius,
+  origin
+);
 
       for (const market of nationalMarkets) {
         if (!Array.isArray(market.jours) ||
