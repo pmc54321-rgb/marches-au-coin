@@ -75,8 +75,9 @@ async function fetchNationalMarkets(commune, radius, origin) {
   const markets = [];
   const seen = new Set();
 
-  for (let page = 1; page <= 5; page++) {
+  for (let page = 1; page <= 85; page++) {
     const url = new URL(NATIONAL_MARKETS_URL);
+    url.searchParams.set('per_page', '100');
    url.searchParams.set('lat', String(origin.lat));
 url.searchParams.set('lng', String(origin.lng));
 url.searchParams.set('radius', String(radius)); 
