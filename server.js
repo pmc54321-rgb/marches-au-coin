@@ -182,6 +182,61 @@ app.post('/api/markets', async (req, res) => {
     const results = [];
     const seen = new Set();
 
+    // Retrieve established markets from the national database
+    try {
+      const nationalMarkets = await fetchNationalMarkets(
+        reference.split(',')[0].replace(/^\d{5}\s*/, '').trim()
+      );
+
+      for (const market of nationalMarkets) {
+        if (!Array.isArray(market.jours) ||
+            !market.jours.length) continue;
+
+        if (market.saisonnier === true) continue;
+
+        if (!['Hebdomadaire', 'Quotidienne'].includes(
+          market.periodicite
+        )) continue;
+
+        if (!Number.isFinite(Number(market.lat)) ||
+            !Number.isFinite(Number(market.lng)) ||
+            market.lat == null || market.lng == null) continue;
+
+        const place = {
+          lat: Number(market.lat),
+          lng: Number(market.lng)
+        };
+
+        const distance = distanceKm(origin, place);
+        if (distance > radius) continue;
+
+        const dayCodes = [
+          'dim', 'lun', 'mar', 'mer',
+          'jeu', 'ven', 'sam'
+        ];
+
+        const matchingDays = days.filter(date =>
+          market.jours.includes(dayCodes[date.getUTCDay()])
+        );
+
+        if (!matchingDays.length) continue;
+
+        results.push({
+          name: market.nom,
+          town: market.commune,
+          location: market.commune,
+          address: market.commune,
+          hours: market.horaires || 'Horaires à confirmer',
+          type: market.type_libelle || 'Marché hebdomadaire',
+          distance_km: Math.round(distance * 10) / 10,
+          source_url: market.url || market.source_url || '',
+          weekdays: matchingDays.map(date => date.getUTCDay())
+        });
+      }
+    } catch (error) {
+      console.error('National market database:', error.message);
+    }
+
     const queries = [
       `marché hebdomadaire jours horaires ${reference} France`,
       `marchés alimentaires communes proches ${reference} France`
