@@ -11,7 +11,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 const PORT = process.env.PORT || 3000;
 const SEARCH_KEY = process.env.SEARCH_API_KEY;
 const MAP_KEY = process.env.GOOGLE_MAPS_API_KEY;
-
+const NATIONAL_MARKETS_URL =
+  'https://regionsgourmandes.fr/wp-json/rg/v1/marches';
 const weekdays = [
   'dimanche', 'lundi', 'mardi', 'mercredi',
   'jeudi', 'vendredi', 'samedi'
